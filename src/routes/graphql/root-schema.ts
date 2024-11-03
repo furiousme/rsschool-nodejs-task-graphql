@@ -34,7 +34,45 @@ const UserType = new GraphQLObjectType({
 		id: {type: UUIDType},
 		name: { type: GraphQLString },
 		balance: { type: GraphQLFloat },
-		profile: {type: ProfileType},
+		profile: {
+			type: ProfileType, 
+			resolve: ({id}: {id: string}, _, {db}: {db: PrismaClient}): Promise<Profile | null> => {
+				return db.profile.findUnique({where: {userId: id}})
+			}
+		},
+		posts: {
+			type: new GraphQLList(PostType),
+			resolve: ({id}: {id: string}, _, {db}: {db: PrismaClient}): Promise<Post[]> => {
+				return db.post.findMany({where: {authorId: id}})
+			}
+		},
+		userSubscribedTo: {
+			type: new GraphQLList(UserType),
+			resolve: ({id}: {id: string}, _, {db}: {db: PrismaClient}): Promise<User[]> => {
+				return db.user.findMany({
+					where: {
+						subscribedToUser: {
+							some: {
+								subscriberId: id,
+						},
+					},
+				},
+			});
+		}},
+		subscribedToUser: { 
+			type: new GraphQLList(UserType), 
+			resolve: ({id}: {id: string}, _, {db}: {db: PrismaClient}): Promise<User[]> => {
+				return db.user.findMany({
+					where: {
+						userSubscribedTo: {
+							some: {
+								authorId: id,
+							},
+						},
+					},
+				})
+			},
+		}
 	})
 })
 
@@ -44,7 +82,20 @@ const ProfileType = new GraphQLObjectType({
 		id: { type: UUIDType },
 		isMale: { type: GraphQLBoolean },
 		yearOfBirth: { type: GraphQLInt },
-		memberTypeId: { type: MemberTypeIdType }
+		memberTypeId: { type: GraphQLString },
+		memberType: { type: MemberTypeType, resolve: async ({memberTypeId}: {memberTypeId: string}, _, {db}: {db: PrismaClient}) => {
+				return await db.memberType.findUnique({where: {id: memberTypeId}})
+			},
+		}
+	})
+})
+
+const SubscriberOnAuthorsType = new GraphQLObjectType({
+	name: "SubscriberOnAuthors",
+	fields: () => ({
+		id: { type: UUIDType },
+		subscriberId: { type: GraphQLString },
+		authorId: { type: GraphQLString },
 	})
 })
 
@@ -102,6 +153,47 @@ export const rootSchema = new GraphQLSchema({
 				args: {id: {type: UUIDType}},
 				resolve: async (_, {id}: {id: string}, {db}: {db: PrismaClient}): Promise<Profile | null> => {
 					return await db.profile.findUnique({ where: {id: id}});
+				}
+			}
+		}
+	}),
+	mutation: new GraphQLObjectType({
+		name: "Mutation",
+		fields: {
+			subscribeTo: {
+				type: SubscriberOnAuthorsType,
+				args: {
+					userId: {type: GraphQLString},
+					authorId: {type: GraphQLString},
+				},
+				resolve: async (_, {userId, authorId}: {userId: string, authorId: string}, {db}: {db: PrismaClient}) => {
+					const res = await db.subscribersOnAuthors.create({
+						data: {
+						  subscriberId: userId,
+						  authorId: authorId,
+						},
+					});
+
+					console.log({res})
+				}
+			},
+			unsubscribeFrom: {
+				type: SubscriberOnAuthorsType,
+				args: {
+					subscriberId: {type: GraphQLString},
+					authorId: {type: GraphQLString},
+				},
+				resolve: async (_, {userId, authorId}: {userId: string, authorId: string}, {db}: {db: PrismaClient}) => {
+					const res = await db.subscribersOnAuthors.delete({
+						where: {
+							subscriberId_authorId: {
+								subscriberId: userId,
+								authorId: authorId,
+							}
+						}
+					});
+
+					console.log({res})
 				}
 			}
 		}

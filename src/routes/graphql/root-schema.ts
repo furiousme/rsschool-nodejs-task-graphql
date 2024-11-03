@@ -1,5 +1,6 @@
-import { MemberType, PrismaClient } from "@prisma/client";
+import { MemberType, Post, PrismaClient } from "@prisma/client";
 import { GraphQLFloat, GraphQLInt, GraphQLObjectType, GraphQLSchema, GraphQLString, GraphQLList } from "graphql";
+import { UUIDType } from "./types/uuid.js";
 
 const memberTypeObj = new GraphQLObjectType({
   name: "MemberType",
@@ -9,6 +10,15 @@ const memberTypeObj = new GraphQLObjectType({
     postsLimitPerMonth: {type: GraphQLInt},
   })
 })
+
+const post = new GraphQLObjectType({
+	name: "Post",
+	fields: () => ({
+		id: {type: UUIDType},
+		title: {type: GraphQLString},
+		content: {type: GraphQLString},
+	})
+  })
 
 export const rootSchema = new GraphQLSchema({
 	query: new GraphQLObjectType({
@@ -26,7 +36,20 @@ export const rootSchema = new GraphQLSchema({
 				resolve: async (_, __, {db}: {db: PrismaClient}): Promise<MemberType[]> => {
 					return await db.memberType.findMany();
 				}
-			}
+			},
+			posts: {
+				type: new GraphQLList(post),
+				resolve: async (_, __, {db}: {db: PrismaClient}): Promise<Post[]> => {
+					return await db.post.findMany();
+				}
+			},
+			post: {
+				type: post,
+				args: {id: {type: UUIDType},},
+				resolve: async (_, {id}: {id: string}, {db}: {db: PrismaClient}): Promise<Post | null> => {
+					return await db.post.findUnique({ where: { id: id}});
+				}
+			},
 		}
 	})
 })

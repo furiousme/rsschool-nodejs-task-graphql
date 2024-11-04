@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { MemberType, Post, PrismaClient, Profile, User } from "@prisma/client";
-import { GraphQLFloat, GraphQLInt, GraphQLObjectType, GraphQLSchema, GraphQLString, GraphQLList, GraphQLBoolean, GraphQLEnumType } from "graphql";
+import { GraphQLFloat, GraphQLInt, GraphQLObjectType, GraphQLSchema, GraphQLString, GraphQLList, GraphQLBoolean, GraphQLEnumType, GraphQLInputObjectType } from "graphql";
 import { UUIDType } from "./types/uuid.js";
 
 const MemberTypeIdType = new GraphQLEnumType({
@@ -90,12 +91,55 @@ const ProfileType = new GraphQLObjectType({
 	})
 })
 
-const SubscriberOnAuthorsType = new GraphQLObjectType({
-	name: "SubscriberOnAuthors",
+const CreateUserInput = new GraphQLInputObjectType({
+	name: "CreateUserInput",
 	fields: () => ({
-		id: { type: UUIDType },
-		subscriberId: { type: GraphQLString },
+		name: { type: GraphQLString },
+		balance: { type: GraphQLFloat },
+	})
+})
+
+const CreateProfileInput = new GraphQLInputObjectType({
+	name: "CreateProfileInput",
+	fields: () => ({
+		userId: { type: GraphQLString },
+		isMale: { type: GraphQLBoolean },
+		yearOfBirth: { type: GraphQLInt },
+		memberTypeId: { type: GraphQLString },
+	})
+})
+
+const CreatePostInput = new GraphQLInputObjectType({
+	name: "CreatePostInput",
+	fields: () => ({
 		authorId: { type: GraphQLString },
+		title: { type: GraphQLString },
+		content: { type: GraphQLString },
+	})
+})
+
+const ChangeUserInput = new GraphQLInputObjectType({
+	name: "ChangeUserInput",
+	fields: () => ({
+		name: { type: GraphQLString },
+		balance: { type: GraphQLFloat },
+	})
+})
+
+const ChangeProfileInput = new GraphQLInputObjectType({
+	name: "ChangeProfileInput",
+	fields: () => ({
+		isMale: { type: GraphQLBoolean },
+		yearOfBirth: { type: GraphQLInt },
+		memberTypeId: { type: MemberTypeIdType },
+	})
+})
+
+const ChangePostInput = new GraphQLInputObjectType({
+	name: "ChangePostInput",
+	fields: () => ({
+		title: { type: GraphQLString },
+		content: { type: GraphQLString },
 	})
 })
 
@@ -160,31 +204,165 @@ export const rootSchema = new GraphQLSchema({
 	mutation: new GraphQLObjectType({
 		name: "Mutation",
 		fields: {
-			subscribeTo: {
-				type: SubscriberOnAuthorsType,
+			createUser: {
+				type: UserType,
+				args: { dto: { type: CreateUserInput }},
+				resolve: async (_, {dto}: {dto: {name: string, balance: number}}, {db}: {db: PrismaClient}) => {
+					return await db.user.create({
+						data: {
+							name: dto.name,
+							balance: dto.balance,
+						}
+					});
+				}
+			},
+			createProfile: {
+				type: ProfileType,
+				args: { dto: { type: CreateProfileInput }},
+				resolve: async (_, {dto}: {dto: {userId: string, isMale: boolean, yearOfBirth: number, memberTypeId: string}}, {db}: {db: PrismaClient}) => {
+					return await db.profile.create({
+						data: {
+							userId: dto.userId,
+							isMale: dto.isMale,
+							yearOfBirth: dto.yearOfBirth,
+							memberTypeId: dto.memberTypeId,
+						}
+					});
+				}
+			},
+			createPost:	{
+				type: PostType,
+				args: { dto: { type: CreatePostInput}},
+				resolve: async (_, {dto}: {dto: {authorId: string, title: string, content: string}}, {db}: {db: PrismaClient}) => {
+					return await db.post.create({
+						data: {
+							authorId: dto.authorId,
+							title: dto.title,
+							content: dto.content,
+						}
+					});
+				}
+		},
+			changeUser: {
+				type: UserType,
+				args: { dto: { type: ChangeUserInput }, id: { type: UUIDType}},
+				resolve: async (_, args: { dto: {name: string, balance: number}, id: string}, {db}: {db: PrismaClient}): Promise<User | null> => {
+					const {dto, id} = args;
+					const {name, balance} = dto;
+					return await db.user.update({
+						where: {
+							id: id,
+						},
+						data: {
+							name: name,
+							balance: balance,
+						}
+					});
+				}
+			},
+			changeProfile: {
+				type: ProfileType,
+				args: { dto: { type: ChangeProfileInput }, id: { type: UUIDType }},
+				resolve: async (_, args: {dto: {isMale: boolean, yearOfBirth: number, memberTypeId: string}, id: string}, {db}: {db: PrismaClient}) => {
+					const {dto, id} = args;
+					const {isMale, yearOfBirth, memberTypeId} = dto;
+
+					return await db.profile.update({
+						where: {
+							id: id,
+						},
+						data: {
+							isMale: isMale,
+							yearOfBirth: yearOfBirth,
+							memberTypeId: memberTypeId,
+						}
+					});
+				}
+			},
+			changePost: {
+				type: PostType,
+				args: { dto: { type: ChangePostInput }, id: { type: UUIDType }},
+				resolve: async (_, args: {dto: {id: string, title: string, content: string}, id: string}, {db}: {db: PrismaClient}) => {
+					const {dto, id} = args;
+					const {title, content} = dto;
+
+					return await db.post.update({
+						where: {
+							id: id,
+						},
+						data: {
+							title: title,
+							content: content,
+						}
+					});
+				}
+			},
+			deleteUser: {
+				type: GraphQLString,
 				args: {
-					userId: {type: GraphQLString},
-					authorId: {type: GraphQLString},
+					id: {type: UUIDType},
+				},
+				resolve: async (_, {id}: {id: string}, {db}: {db: PrismaClient}) => {
+					await db.user.delete({
+						where: {
+							id: id,
+						}
+					});
+					return id;
+				}
+			},
+			deleteProfile: {
+				type: GraphQLString,
+				args: {
+					id: {type: UUIDType},
+				},
+				resolve: async (_, {id}: {id: string}, {db}: {db: PrismaClient}) => {
+					await db.profile.delete({
+						where: {
+							id: id,
+						}
+					});
+					return id;
+				}
+			},
+			deletePost: {
+				type: GraphQLString,
+				args: {
+					id: {type: UUIDType},
+				},
+				resolve: async (_, {id}: {id: string}, {db}: {db: PrismaClient}) => {
+					await db.post.delete({
+						where: {
+							id: id,
+						}
+					});
+					return id;
+				}
+			},
+			subscribeTo: {
+				type: GraphQLString,
+				args: {
+					userId: {type: UUIDType},
+					authorId: {type: UUIDType},
 				},
 				resolve: async (_, {userId, authorId}: {userId: string, authorId: string}, {db}: {db: PrismaClient}) => {
-					const res = await db.subscribersOnAuthors.create({
+					await db.subscribersOnAuthors.create({
 						data: {
 						  subscriberId: userId,
 						  authorId: authorId,
 						},
 					});
-
-					console.log({res})
+					return authorId;
 				}
 			},
 			unsubscribeFrom: {
-				type: SubscriberOnAuthorsType,
+				type: GraphQLString,
 				args: {
-					subscriberId: {type: GraphQLString},
-					authorId: {type: GraphQLString},
+					userId: {type: UUIDType},
+					authorId: {type: UUIDType},
 				},
 				resolve: async (_, {userId, authorId}: {userId: string, authorId: string}, {db}: {db: PrismaClient}) => {
-					const res = await db.subscribersOnAuthors.delete({
+					await db.subscribersOnAuthors.delete({
 						where: {
 							subscriberId_authorId: {
 								subscriberId: userId,
@@ -192,8 +370,7 @@ export const rootSchema = new GraphQLSchema({
 							}
 						}
 					});
-
-					console.log({res})
+					return authorId;
 				}
 			}
 		}
